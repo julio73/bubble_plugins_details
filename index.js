@@ -1,10 +1,11 @@
-const rp = require('request-promise');
+const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 
-rp('https://bubble.io/plugins')
-  .then(content => {
-    console.log(content);
-  })
-  .catch(function (err) {
-    console.log(err);
-  });
+(async () => {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  await page.goto('https://bubble.io/plugins');
+  const content = await page.content();
+  console.log(content);
+  await browser.close();
+})();
