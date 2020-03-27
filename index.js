@@ -1,17 +1,21 @@
 const puppeteer = require('puppeteer');
+const cliProgress = require('cli-progress');
 
 (async () => {
   const browser = await puppeteer.launch({defaultViewport: null});
   const page = await browser.newPage();
+  console.log('Loading plugins page https://bubble.io/plugins ...');
   await page.goto('https://bubble.io/plugins', {timeout: 0});
   
+  // Scroll through the page to load the plugin list
+  console.log('Scrolling through all plugins...');
   await scrollToBottom(page);
 
   // Collect plugins' name and url values
-  const elements = await page.evaluate(() => {
-    return [...document.querySelectorAll('.RepeatingGroup .group-item')].map((el) => {
-      const link = el.querySelector('a.clickable-element');
-      return {name: el.innerText, link: link ? link.getAttribute('href') : null};
+  const plugins = await page.evaluate(() => {
+    return [...document.querySelectorAll('.RepeatingGroup .group-item')].map((plugin) => {
+      const link = plugin.querySelector('a.clickable-element');
+      return {name: plugin.innerText, link: link ? link.getAttribute('href') : null};
     });
   });
 
@@ -20,13 +24,15 @@ const puppeteer = require('puppeteer');
   let csvPrintOrder = ['name','license','pricing','one_time_price','usage','rating','author','date_created','date_modified','link'];
   csvTable.push(csvPrintOrder.reduce((acc, next) => `${acc}${JSON.stringify(next)},`, ""));
 
-  console.log('gathering plugin details...');
-  for (let el of elements) {
-    let allValues = {...el};
-    if (/^https:\/\/bubble\.io\/plugin\/.+$/.test(el.link)) {
-      await page.goto(el.link);
+  console.log('Gathering plugin details...');
+  const retrievalProgressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+  retrievalProgressBar.start(plugins.length, 0);
+  for (let plugin of plugins) {
+    let allValues = {...plugin};
+    if (/^https:\/\/bubble\.io\/plugin\/.+$/.test(plugin.link)) {
+      await page.goto(plugin.link);
       // Retrieve plugin details from JSON objects in client db
-      let urlParts = el.link.split('-');
+      let urlParts = plugin.link.split('-');
       let pluginId = urlParts[urlParts.length - 1];
       let pluginData = await page.evaluate((pluginId) => Lib().db_instance()._locals[pluginId].raw, pluginId);
       
@@ -50,9 +56,10 @@ const puppeteer = require('puppeteer');
     }
     // Push the values to the table
     csvTable.push(csvPrintOrder.reduce((acc, next) => `${acc}${JSON.stringify(allValues[next] != null ? allValues[next] : '')},`, ""));
-    process.stdout.write('.');
+    retrievalProgressBar.increment();
   };
-  process.stdout.write('\n\n');
+  retrievalProgressBar.stop();
+  console.log('\n\n');
 
   // Print out the table
   for (const line of csvTable) {
@@ -64,11 +71,8 @@ const puppeteer = require('puppeteer');
 
 async function scrollToBottom(page) {
   const delay = 400;
-  process.stdout.write('loading');
   while (await page.evaluate(() => document.scrollingElement.scrollTop + window.innerHeight < document.scrollingElement.scrollHeight)) {
     await page.evaluate(() => { document.scrollingElement.scrollBy(0, window.innerHeight); });
-    process.stdout.write('.');
     await page.waitFor(delay);
   }
-  process.stdout.write('\n');
 }
