@@ -1,9 +1,9 @@
 const puppeteer = require('puppeteer');
 
 (async () => {
-  const browser = await puppeteer.launch({headless: false});
+  const browser = await puppeteer.launch({defaultViewport: null});
   const page = await browser.newPage();
-  await page.goto('https://bubble.io/plugins', {timeout: 0, waitUntil: "networkidle0"});
+  await page.goto('https://bubble.io/plugins', {timeout: 0});
   
   await scrollToBottom(page);
 
